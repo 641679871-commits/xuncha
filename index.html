@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a6feb">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<title>仓库巡查记录本</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --primary:#1a6feb; --primary-dark:#0f4fb5; --bg:#f2f5f9; --card:#ffffff;
+  --text:#1c2530; --muted:#7b8794; --border:#e3e9f0; --danger:#e5484d;
+  --ok:#1a9e55; --warn:#e6a700; --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);
+  padding-bottom:calc(70px + env(safe-area-inset-bottom));font-size:15px}
+header{background:linear-gradient(135deg,#1a6feb,#3b8df8);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;
+  position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(26,111,235,.25)}
+header h1{font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px}
+header .stat{font-size:12px;opacity:.85;margin-top:3px}
+.container{padding:12px;max-width:640px;margin:0 auto}
+/* 底部导航 */
+.tabbar{position:fixed;bottom:0;left:0;right:0;height:calc(60px + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);background:#fff;border-top:1px solid var(--border);
+  display:flex;z-index:60}
+.tabbar button{flex:1;border:none;background:none;font-size:12px;color:var(--muted);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer}
+.tabbar button .ico{font-size:22px;line-height:1}
+.tabbar button.active{color:var(--primary);font-weight:600}
+/* 卡片与表单 */
+.card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+label.fl{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}
+label.fl:first-child{margin-top:0}
+label.fl .req{color:var(--danger)}
+input[type=text],input[type=date],input[type=month],select,textarea{
+  width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;font-size:15px;
+  background:#fafbfc;color:var(--text);outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);background:#fff}
+textarea{min-height:88px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:10px;
+  padding:12px 18px;font-size:15px;font-weight:600;cursor:pointer;width:100%}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:active{background:var(--primary-dark)}
+.btn-ghost{background:#eef3fa;color:var(--primary)}
+.btn-danger-ghost{background:#fdecec;color:var(--danger)}
+.btn-sm{padding:7px 12px;font-size:13px;width:auto;border-radius:8px}
+/* 记录列表 */
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.record{background:var(--card);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;
+  box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.record .head{padding:12px 14px 8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.record .title{font-weight:600;font-size:15px;flex:1;word-break:break-all}
+.record .date{font-size:12px;color:var(--muted);white-space:nowrap}
+.record .meta{padding:0 14px 8px;display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:11px;padding:3px 8px;border-radius:20px;background:#eef3fa;color:var(--primary);white-space:nowrap}
+.tag.wh{background:#e8f5ee;color:#0f7a3d}
+.tag.st0{background:#fdf3dc;color:#a37a00}
+.tag.st1{background:#e5f0fd;color:#1a6feb}
+.tag.st2{background:#e8f5ee;color:#1a9e55}
+.record .body{padding:0 14px 10px;font-size:14px;color:#45525f;white-space:pre-wrap;word-break:break-all}
+.record .thumbs{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 12px}
+.record .thumbs img,.record .thumbs video{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+.record .ops{border-top:1px solid var(--border);display:flex}
+.record .ops button{flex:1;border:none;background:none;padding:11px;font-size:13px;color:var(--muted);cursor:pointer}
+.record .ops button:active{background:#f4f7fb}
+.record .ops .del{color:var(--danger)}
+.empty{text-align:center;color:var(--muted);padding:50px 20px;font-size:14px}
+.empty .big{font-size:44px;margin-bottom:10px}
+/* 附件选择预览 */
+.att-preview{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.att-preview .item{position:relative;width:80px;height:80px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:#f4f7fb}
+.att-preview img,.att-preview video{width:100%;height:100%;object-fit:cover}
+.att-preview .rm{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;
+  background:rgba(0,0,0,.6);color:#fff;border:none;font-size:12px;line-height:20px;padding:0;cursor:pointer}
+.att-preview .vname{position:absolute;bottom:0;left:0;right:0;font-size:9px;color:#fff;background:rgba(0,0,0,.45);padding:2px 3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick-btn{display:flex;align-items:center;gap:8px;border:1.5px dashed #b9c8da;border-radius:12px;
+  padding:14px;color:var(--primary);font-size:14px;background:#f6f9fd;cursor:pointer;width:100%;justify-content:center}
+/* 遮罩弹层 */
+.mask{position:fixed;inset:0;background:rgba(15,23,32,.45);z-index:80;display:none;align-items:flex-end;justify-content:center}
+.mask.show{display:flex}
+.sheet{background:#fff;width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet h3{font-size:16px;margin-bottom:14px;text-align:center}
+.sheet .btn{margin-top:10px}
+.toast{position:fixed;top:calc(50% );left:50%;transform:translate(-50%,-50%);background:rgba(15,23,32,.85);color:#fff;
+  padding:12px 22px;border-radius:12px;font-size:14px;z-index:99;display:none;max-width:80vw;text-align:center}
+.hidden{display:none!important}
+.exp-note{font-size:12px;color:var(--muted);line-height:1.7;margin-top:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <h1 style="flex:1">📦 仓库巡查记录本</h1>
+    <button id="installBtn" onclick="showInstallHelp()" style="border:none;background:rgba(255,255,255,.22);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;display:none">📲 安装</button>
+  </div>
+  <div class="stat" id="statLine">加载中…</div>
+</header>
+
+<div class="container">
+  <!-- ============ 列表页 ============ -->
+  <div id="page-list">
+    <div class="card">
+      <div class="filters">
+        <select id="fWarehouse"><option value="">全部仓库</option></select>
+        <select id="fType">
+          <option value="">全部类型</option>
+          <option value="问题整改">⚠️ 问题整改</option>
+          <option value="优化建议">💡 优化建议</option>
+          <option value="待办事项">📌 待办事项</option>
+        </select>
+        <input type="month" id="fMonth" title="按月份筛选">
+        <input type="text" id="fKeyword" placeholder="🔍 搜索主题/内容/责任人">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="clearFilters()">清除筛选</button>
+      </div>
+    </div>
+    <div id="recordList"></div>
+  </div>
+
+  <!-- ============ 导出页 ============ -->
+  <div id="page-export" class="hidden">
+    <div class="card">
+      <label class="fl">导出范围</label>
+      <div class="filters" style="grid-template-columns:1fr">
+        <select id="expScope">
+          <option value="all">📦 全部记录</option>
+          <option value="month">🗓️ 按月份</option>
+          <option value="range">📅 自定义日期区间</option>
+        </select>
+        <input type="month" id="expMonth" class="hidden">
+        <div class="row2 hidden" id="expRangeWrap">
+          <input type="date" id="expStart">
+          <input type="date" id="expEnd">
+        </div>
+        <select id="expWarehouse"><option value="">全部仓库</option></select>
+      </div>
+      <label class="fl">导出格式</label>
+      <div style="display:grid;gap:10px">
+        <button class="btn btn-primary" onclick="doExport('xlsx')">📊 导出 Excel（.xlsx）</button>
+        <button class="btn btn-ghost" onclick="doExport('html')">🌐 导出 HTML（含照片/视频）</button>
+        <button class="btn btn-ghost" onclick="doBackup()">💾 备份全部数据（.json）</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('restoreFile').click()">♻️ 恢复备份</button>
+        <input type="file" id="restoreFile" accept=".json" class="hidden" onchange="doRestore(this)">
+      </div>
+      <div class="exp-note">
+        · Excel 包含全部文字字段，适合做汇总统计；<br>
+        · HTML 可在电脑/手机浏览器直接打开，包含现场照片与视频；<br>
+        · 建议定期做 JSON 备份，防止换手机或清缓存丢失数据。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部导航 -->
+<nav class="tabbar">
+  <button id="tab-list" class="active" onclick="switchTab('list')"><span class="ico">📋</span>巡查记录</button>
+  <button onclick="openEditor()"><span class="ico">➕</span>新建记录</button>
+  <button id="tab-export" onclick="switchTab('export')"><span class="ico">📤</span>导出</button>
+</nav>
+
+<!-- 新建/编辑 弹层 -->
+<div class="mask" id="editorMask">
+  <div class="sheet" style="max-height:92vh;overflow-y:auto">
+    <h3 id="editorTitle">新建巡查记录</h3>
+    <label class="fl">仓库 <span class="req">*</span></label>
+    <div class="row2">
+      <select id="inWarehouse" onchange="warehouseChanged()"></select>
+      <input type="text" id="inWarehouseNew" class="hidden" placeholder="输入新仓库名称">
+    </div>
+    <div class="row2" style="margin-top:10px">
+      <div>
+        <label class="fl">记录日期 <span class="req">*</span></label>
+        <input type="date" id="inDate">
+      </div>
+      <div>
+        <label class="fl">责任人</label>
+        <input type="text" id="inOwner" placeholder="如：张三">
+      </div>
+    </div>
+    <label class="fl">类型</label>
+    <select id="inType">
+      <option value="问题整改">⚠️ 问题整改（做得不好的，需整改）</option>
+      <option value="优化建议">💡 优化建议（可以做得更好的）</option>
+      <option value="待办事项">📌 待办事项 / 想法</option>
+    </select>
+    <label class="fl">主题 <span class="req">*</span></label>
+    <input type="text" id="inTopic" placeholder="如：B区月台地面积水未清理">
+    <label class="fl">详细内容 / 备注信息</label>
+    <textarea id="inNote" placeholder="详细描述发现的问题、整改要求、完成时限等…"></textarea>
+    <label class="fl">处理状态</label>
+    <select id="inStatus">
+      <option value="待处理">🟡 待处理</option>
+      <option value="处理中">🔵 处理中</option>
+      <option value="已完成">🟢 已完成</option>
+    </select>
+    <label class="fl">现场附件（拍照 / 录像）</label>
+    <button class="pick-btn" onclick="document.getElementById('attFile').click()">
+      📷 拍照 / 🎥 录像 / 从相册选择（可多选）
+    </button>
+    <input type="file" id="attFile" accept="image/*,video/*" multiple class="hidden" onchange="addFiles(this)">
+    <div class="att-preview" id="attPreview"></div>
+    <div style="display:grid;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="saveRecord()">✅ 保存记录</button>
+      <button class="btn btn-ghost" onclick="closeEditor()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 安装指引弹层 -->
+<div class="mask" id="installMask">
+  <div class="sheet">
+    <h3>📲 安装到手机桌面</h3>
+    <div id="installSteps" style="font-size:14px;line-height:2.1;color:#45525f"></div>
+    <button class="btn btn-ghost" onclick="$('installMask').classList.remove('show')">我知道了</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= IndexedDB ================= */
+const DB_NAME='inspectionDB', STORE='records';
+let db=null;
+function openDB(){return new Promise((res,rej)=>{
+  const rq=indexedDB.open(DB_NAME,1);
+  rq.onupgradeneeded=e=>{e.target.result.createObjectStore(STORE,{keyPath:'id'})};
+  rq.onsuccess=e=>{db=e.target.result;res(db)};
+  rq.onerror=()=>rej(rq.error);
+})}
+function dbAll(){return new Promise((res,rej)=>{
+  const rq=db.transaction(STORE,'readonly').objectStore(STORE).getAll();
+  rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>rej(rq.error);
+})}
+function dbPut(rec){return new Promise((res,rej)=>{
+  const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(rec);
+  tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
+})}
+function dbDel(id){return new Promise((res,rej)=>{
+  const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);
+  tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
+})}
+
+/* ================= 全局状态 ================= */
+let RECORDS=[], editingId=null, pendingFiles=[]; // pendingFiles: {blob,name,type,isNew}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg,ms=1800){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(t._tm);t._tm=setTimeout(()=>t.style.display='none',ms)}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function fmtDT(ts){const d=new Date(ts);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+
+/* ================= 仓库列表 ================= */
+const WH_KEY='warehouses';
+function getWarehouses(){try{return JSON.parse(localStorage.getItem(WH_KEY))||[]}catch(e){return[]}}
+function saveWarehouses(list){localStorage.setItem(WH_KEY,JSON.stringify(list))}
+function refreshWarehouseSelects(){
+  const whs=getWarehouses();
+  const opts='<option value="">请选择仓库</option>'+whs.map(w=>`<option>${esc(w)}</option>`).join('')+'<option value="__new__">➕ 新增仓库…</option>';
+  $('inWarehouse').innerHTML=opts;
+  const fo='<option value="">全部仓库</option>'+whs.map(w=>`<option>${esc(w)}</option>`).join('');
+  $('fWarehouse').innerHTML=fo;$('expWarehouse').innerHTML=fo;
+}
+function warehouseChanged(){
+  const isNew=$('inWarehouse').value==='__new__';
+  $('inWarehouseNew').classList.toggle('hidden',!isNew);
+  if(isNew)$('inWarehouseNew').focus();
+}
+
+/* ================= 编辑器 ================= */
+function openEditor(rec){
+  editingId=rec?rec.id:null; pendingFiles=[];
+  $('editorTitle').textContent=rec?'编辑巡查记录':'新建巡查记录';
+  $('inDate').value=rec?rec.date:today();
+  $('inOwner').value=rec?(rec.owner||''):'';
+  $('inType').value=rec?(rec.type||'问题整改'):'问题整改';
+  $('inTopic').value=rec?(rec.topic||''):'';
+  $('inNote').value=rec?(rec.note||''):'';
+  $('inStatus').value=rec?(rec.status||'待处理'):'待处理';
+  // 仓库
+  refreshWarehouseSelects();
+  if(rec){$('inWarehouse').value=rec.warehouse;$('inWarehouseNew').classList.add('hidden')}
+  else{$('inWarehouse').value='';$('inWarehouseNew').classList.add('hidden')}
+  $('inWarehouseNew').value='';
+  // 已有附件
+  pendingFiles=(rec&&rec.attachments||[]).map(a=>({blob:a.data,name:a.name,type:a.type,isNew:false}));
+  renderAttPreview();
+  $('editorMask').classList.add('show');
+}
+function closeEditor(){$('editorMask').classList.remove('show')}
+function addFiles(input){
+  for(const f of input.files){
+    if(f.size>100*1024*1024){toast('「'+f.name+'」超过100MB，已跳过');continue}
+    pendingFiles.push({blob:f,name:f.name,type:f.type,isNew:true});
+  }
+  input.value='';renderAttPreview();
+}
+function renderAttPreview(){
+  $('attPreview').innerHTML=pendingFiles.map((p,i)=>{
+    const url=URL.createObjectURL(p.blob);
+    if(p.type&&p.type.startsWith('video')){
+      return `<div class="item"><video src="${url}" muted></video><div class="vname">🎥 ${esc(p.name)}</div><button class="rm" onclick="rmAtt(${i})">✕</button></div>`;
+    }
+    return `<div class="item"><img src="${url}"><button class="rm" onclick="rmAtt(${i})">✕</button></div>`;
+  }).join('');
+}
+function rmAtt(i){pendingFiles.splice(i,1);renderAttPreview()}
+async function saveRecord(){
+  let wh=$('inWarehouse').value;
+  if(wh==='__new__'){
+    wh=$('inWarehouseNew').value.trim();
+    if(!wh){toast('请填写新仓库名称');return}
+    const whs=getWarehouses();if(!whs.includes(wh)){whs.push(wh);saveWarehouses(whs)}
+  }
+  if(!wh){toast('请选择或新增仓库');return}
+  const topic=$('inTopic').value.trim();
+  if(!topic){toast('请填写主题');return}
+  const date=$('inDate').value||today();
+  // 旧附件转存
+  const atts=[];
+  for(const p of pendingFiles){
+    atts.push({name:p.name,type:p.type,data:p.blob});
+  }
+  const now=Date.now();
+  const rec=editingId?RECORDS.find(r=>r.id===editingId):{id:'r'+now+Math.random().toString(36).slice(2,7)};
+  Object.assign(rec,{warehouse:wh,date,topic,note:$('inNote').value.trim(),owner:$('inOwner').value.trim(),
+    type:$('inType').value,status:$('inStatus').value,attachments:atts,
+    updatedAt:now,createdAt:rec.createdAt||now});
+  try{await dbPut(rec)}catch(e){toast('保存失败：'+e);return}
+  toast('✅ 已保存');
+  closeEditor();await loadData();
+}
+
+/* ================= 列表 ================= */
+function switchTab(t){
+  $('page-list').classList.toggle('hidden',t!=='list');
+  $('page-export').classList.toggle('hidden',t!=='export');
+  $('tab-list').classList.toggle('active',t==='list');
+  $('tab-export').classList.toggle('active',t==='export');
+}
+async function loadData(){
+  RECORDS=(await dbAll()).sort((a,b)=> b.date===a.date ? b.createdAt-a.createdAt : (b.date>a.date?1:-1));
+  refreshWarehouseSelects();renderList();renderStat();
+}
+function renderStat(){
+  const total=RECORDS.length;
+  const open=RECORDS.filter(r=>r.status!=='已完成').length;
+  $('statLine').textContent=`共 ${total} 条记录 · 待处理 ${open} 条 · 数据保存在本机`;
+}
+function filtered(){
+  const fw=$('fWarehouse').value,ft=$('fType').value,fm=$('fMonth').value,kw=$('fKeyword').value.trim().toLowerCase();
+  return RECORDS.filter(r=>{
+    if(fw&&r.warehouse!==fw)return false;
+    if(ft&&r.type!==ft)return false;
+    if(fm&&!(r.date||'').startsWith(fm))return false;
+    if(kw&&!((r.topic||'')+(r.note||'')+(r.owner||'')).toLowerCase().includes(kw))return false;
+    return true;
+  });
+}
+function renderList(){
+  const list=filtered(),el=$('recordList');
+  if(!list.length){el.innerHTML=`<div class="empty"><div class="big">📋</div>暂无记录<br><span style="font-size:12px">点击底部「➕ 新建记录」开始巡查登记</span></div>`;return}
+  el.innerHTML=list.map(r=>{
+    const stClass=r.status==='已完成'?'st2':(r.status==='处理中'?'st1':'st0');
+    const typeIcon=r.type==='优化建议'?'💡':(r.type==='待办事项'?'📌':'⚠️');
+    const nAtt=(r.attachments||[]).length;
+    return `<div class="record">
+      <div class="head"><div class="title">${typeIcon} ${esc(r.topic)}</div><div class="date">${esc(r.date)}</div></div>
+      <div class="meta">
+        <span class="tag wh">🏭 ${esc(r.warehouse)}</span>
+        <span class="tag">${esc(r.type)}</span>
+        <span class="tag ${stClass}">${esc(r.status)}</span>
+        ${r.owner?`<span class="tag">👤 ${esc(r.owner)}</span>`:''}
+        ${nAtt?`<span class="tag">📎 ${nAtt} 个附件</span>`:''}
+      </div>
+      ${r.note?`<div class="body">${esc(r.note)}</div>`:''}
+      ${nAtt?`<div class="thumbs">${r.attachments.map((a,i)=>{
+        const url=URL.createObjectURL(a.data);
+        return a.type&&a.type.startsWith('video')
+          ?`<video src="${url}" controls preload="metadata"></video>`
+          :`<img src="${url}" onclick="window.open('${url}')" >`;
+      }).join('')}</div>`:''}
+      <div class="ops">
+        <button onclick="editRecord('${r.id}')">✏️ 编辑</button>
+        <button onclick="quickStatus('${r.id}')">🔄 状态</button>
+        <button class="del" onclick="delRecord('${r.id}')">🗑️ 删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function clearFilters(){$('fWarehouse').value='';$('fType').value='';$('fMonth').value='';$('fKeyword').value='';renderList()}
+function editRecord(id){const r=RECORDS.find(x=>x.id===id);if(r)openEditor(r)}
+async function delRecord(id){
+  if(!confirm('确定删除这条记录吗？（含其附件）'))return;
+  await dbDel(id);await loadData();toast('已删除');
+}
+async function quickStatus(id){
+  const r=RECORDS.find(x=>x.id===id);if(!r)return;
+  const order=['待处理','处理中','已完成'];
+  r.status=order[(order.indexOf(r.status)+1)%3];
+  r.updatedAt=Date.now();await dbPut(r);await loadData();toast('状态 → '+r.status);
+}
+
+/* ================= 导出 ================= */
+function exportSelection(){
+  const scope=$('expScope').value,wh=$('expWarehouse').value;
+  let list=RECORDS.filter(r=>!wh||r.warehouse===wh);
+  if(scope==='month'){const m=$('expMonth').value;if(!m){toast('请选择月份');return null}list=list.filter(r=>(r.date||'').startsWith(m))}
+  if(scope==='range'){
+    const s=$('expStart').value,e=$('expEnd').value;
+    if(!s||!e){toast('请选择起止日期');return null}
+    list=list.filter(r=>r.date>=s&&r.date<=e);
+  }
+  return list;
+}
+function fileBaseName(){
+  const scope=$('expScope').value;let tag='全部';
+  if(scope==='month')tag=$('expMonth').value||'月份';
+  if(scope==='range')tag=($('expStart').value||'')+'至'+($('expEnd').value||'');
+  const wh=$('expWarehouse').value;
+  return '巡查记录_'+(wh?wh+'_':'')+tag;
+}
+function rowsOf(list){
+  return list.map((r,i)=>[i+1,r.date,r.warehouse,r.type,r.topic,r.note||'',r.owner||'',r.status,(r.attachments||[]).length,fmtDT(r.updatedAt)]);
+}
+async function blobToDataURL(blob){return new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(blob)})}
+async function doExport(fmt){
+  const list=exportSelection();if(!list)return;
+  if(!list.length){toast('该范围内没有记录');return}
+  if(fmt==='xlsx'){
+    if(typeof XLSX==='undefined'){toast('Excel 组件加载失败（需联网），请改用 HTML 导出');return}
+    const header=['序号','记录日期','仓库','类型','主题','内容/备注','责任人','状态','附件数','最后更新'];
+    const ws=XLSX.utils.aoa_to_sheet([header,...rowsOf(list)]);
+    ws['!cols']=[{wch:5},{wch:12},{wch:14},{wch:10},{wch:30},{wch:40},{wch:10},{wch:8},{wch:7},{wch:17}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'巡查记录');
+    XLSX.writeFile(wb,fileBaseName()+'.xlsx');
+    toast('✅ Excel 已导出');
+  }else{
+    toast('正在生成 HTML（含附件）…',3000);
+    let body='';
+    for(const r of list){
+      let attHtml='';
+      for(const a of (r.attachments||[])){
+        const du=await blobToDataURL(a.data);
+        attHtml+= a.type&&a.type.startsWith('video')
+          ?`<video src="${du}" controls></video>`
+          :`<a href="${du}" target="_blank"><img src="${du}"></a>`;
+      }
+      body+=`<div class="rec">
+        <div class="rt"><b>${esc(r.topic)}</b><span>${esc(r.date)}</span></div>
+        <div class="rm2"><span class="tg wh">${esc(r.warehouse)}</span><span class="tg">${esc(r.type)}</span>
+        <span class="tg ${r.status==='已完成'?'ok':''}">${esc(r.status)}</span>${r.owner?`<span class="tg">责任人：${esc(r.owner)}</span>`:''}</div>
+        ${r.note?`<div class="rn">${esc(r.note)}</div>`:''}
+        ${attHtml?`<div class="ra">${attHtml}</div>`:''}
+      </div>`;
+    }
+    const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<title>${esc(fileBaseName())}</title><style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f2f5f9;margin:0;padding:20px;color:#1c2530}
+h1{font-size:20px}h1 small{font-size:12px;color:#7b8794;font-weight:400}
+.rec{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.rt{display:flex;justify-content:space-between;font-size:15px;margin-bottom:8px}
+.rt span{color:#7b8794;font-size:12px}
+.rm2{margin-bottom:8px}.tg{display:inline-block;font-size:11px;background:#eef3fa;color:#1a6feb;border-radius:20px;padding:3px 9px;margin-right:6px}
+.tg.wh{background:#e8f5ee;color:#0f7a3d}.tg.ok{background:#e8f5ee;color:#1a9e55}
+.rn{font-size:14px;color:#45525f;white-space:pre-wrap;margin-bottom:8px}
+.ra img,.ra video{max-width:220px;max-height:220px;border-radius:10px;margin:0 8px 8px 0;border:1px solid #e3e9f0;display:inline-block;vertical-align:top}
+</style></head><body>
+<h1>📦 仓库巡查记录 <small>导出于 ${fmtDT(Date.now())} · 共 ${list.length} 条</small></h1>
+${body}
+</body></html>`;
+    downloadBlob(new Blob([html],{type:'text/html;charset=utf-8'}),fileBaseName()+'.html');
+    toast('✅ HTML 已导出');
+  }
+}
+function doBackup(){
+  (async()=>{
+    const data=JSON.stringify({warehouses:getWarehouses(),records:await dbAll()});
+    downloadBlob(new Blob([data],{type:'application/json'}),'巡查记录备份_'+today()+'.json');
+    toast('✅ 备份已导出');
+  })();
+}
+function doRestore(input){
+  const f=input.files[0];if(!f)return;
+  const fr=new FileReader();
+  fr.onload=async()=>{
+    try{
+      const d=JSON.parse(fr.result);
+      if(!d.records)throw new Error('格式不正确');
+      if(!confirm(`将导入 ${d.records.length} 条记录，与现有记录合并（相同ID会被覆盖），确定吗？`))return;
+      for(const r of d.records){
+        for(const a of (r.attachments||[])){if(a.data&&typeof a.data==='string'){a.data=await(await fetch(a.data)).blob()}}
+        await dbPut(r);
+      }
+      if(d.warehouses){const cur=getWarehouses();saveWarehouses([...new Set([...cur,...(d.warehouses||[])])])}
+      await loadData();toast('✅ 恢复完成');
+    }catch(e){toast('恢复失败：'+e.message)}
+    input.value='';
+  };
+  fr.readAsText(f);
+}
+function downloadBlob(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+
+/* ================= 事件绑定与启动 ================= */
+$('expScope').addEventListener('change',()=>{
+  $('expMonth').classList.toggle('hidden',$('expScope').value!=='month');
+  $('expRangeWrap').classList.toggle('hidden',$('expScope').value!=='range');
+});
+['fWarehouse','fType','fMonth'].forEach(id=>$(id).addEventListener('change',renderList));
+$('fKeyword').addEventListener('input',renderList);
+$('editorMask').addEventListener('click',e=>{if(e.target===$('editorMask'))closeEditor()});
+$('installMask').addEventListener('click',e=>{if(e.target===$('installMask'))$('installMask').classList.remove('show')});
+function isStandalone(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}
+const IS_IOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+function showInstallHelp(){
+  $('installSteps').innerHTML = IS_IOS
+    ? '1️⃣ 用 <b>Safari</b> 打开本页链接<br>2️⃣ 点击底部工具栏中间的「分享」按钮 <b>⬆️</b><br>3️⃣ 下滑找到并点击「<b>添加到主屏幕</b>」<br>4️⃣ 点击右上角「添加」完成<br><span style="color:#7b8794;font-size:12px">之后从桌面图标打开即全屏运行，和原生APP体验一致</span>'
+    : '1️⃣ 用 <b>Chrome</b> 等浏览器打开本页链接<br>2️⃣ 点击右上角「<b>⋮</b>」菜单<br>3️⃣ 选择「<b>添加到主屏幕</b>」或「<b>安装应用</b>」<br>4️⃣ 确认后桌面出现APP图标<br><span style="color:#7b8794;font-size:12px">之后从桌面图标打开即全屏运行，和原生APP体验一致</span>';
+  $('installMask').classList.add('show');
+}
+if(!isStandalone())$('installBtn').style.display='inline-block';
+
+(async function init(){
+  await openDB();
+  await loadData();
+})();
+</script>
+</body>
+</html>
